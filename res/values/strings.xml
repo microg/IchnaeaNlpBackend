@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  Copyright 2013-2015 µg Project Team
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  -->
+
+<resources>
+    <string name="app_name">Ichnaea UnifiedNlp Backend</string>
+    <string name="backend_name">Ichnaea Backend</string>
+    <string name="summary">Locate using Mozilla Location Service</string>
+
+    <string name="pref_title_submit_data">Contribute data</string>
+    <string name="pref_description_submit_data">Submit access point information to the public database of Mozilla Location Service</string>
+    <string name="pref_title_nickname">Nickname</string>
+    <string name="pref_description_nickname">Used for the leaderboard of Mozilla Location Service (when submitting)</string>
+
+    <string name="first_time_notification_title">Contribute to Mozilla Location Service</string>
+    <string name="first_time_notification_content"><![CDATA[ Mozilla Location Service is a free, user-powered location database.<br>
+Ichnaea Backend allows you to contribute to the database and thus increase location accuracy for all users without additional battery or network usage.<br>
+<b>Click here to open settings and enable contribution.</b> Thanks.]]></string>
+</resources>
