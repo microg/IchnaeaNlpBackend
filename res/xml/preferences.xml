@@ -16,16 +16,32 @@
 
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <CheckBoxPreference
-        android:key="submit_data"
-        android:title="@string/pref_title_submit_data"
-        android:summary="@string/pref_description_submit_data"
-        android:defaultValue="false" />
+    <PreferenceCategory android:title="@string/pref_category_submit">
+        <CheckBoxPreference
+            android:key="submit_data"
+            android:title="@string/pref_title_submit_data"
+            android:summary="@string/pref_description_submit_data"
+            android:defaultValue="false" />
 
-    <EditTextPreference
-        android:key="nickname"
-        android:title="@string/pref_title_nickname"
-        android:summary="@string/pref_description_nickname"
-        android:defaultValue="µg User" />
+        <EditTextPreference
+            android:key="nickname"
+            android:title="@string/pref_title_nickname"
+            android:summary="@string/pref_description_nickname"
+            android:defaultValue="µg User" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/pref_category_source">
+        <CheckBoxPreference
+            android:key="use_wifis"
+            android:title="@string/pref_title_use_wifis"
+            android:summary="@string/pref_description_use_wifis"
+            android:defaultValue="true" />
+        <CheckBoxPreference
+            android:key="use_cells"
+            android:title="@string/pref_title_use_cells"
+            android:summary="@string/pref_description_use_cells"
+            android:defaultValue="true" />
+
+    </PreferenceCategory>
 
 </PreferenceScreen>

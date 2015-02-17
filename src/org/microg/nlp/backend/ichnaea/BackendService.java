@@ -24,6 +24,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Build;
+import android.os.Process;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.text.Html;
@@ -33,7 +35,8 @@ import android.util.Log;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.microg.nlp.api.LocationBackendService;
+import org.microg.nlp.api.CellBackendHelper;
+import org.microg.nlp.api.HelperLocationBackendService;
 import org.microg.nlp.api.LocationHelper;
 import org.microg.nlp.api.WiFiBackendHelper;
 
@@ -44,7 +47,11 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.util.Set;
 
-public class BackendService extends LocationBackendService implements WiFiBackendHelper.Listener {
+import static org.microg.nlp.api.CellBackendHelper.Cell;
+import static org.microg.nlp.api.WiFiBackendHelper.WiFi;
+
+public class BackendService extends HelperLocationBackendService
+        implements WiFiBackendHelper.Listener, CellBackendHelper.Listener {
 
     private static final String TAG = "IchnaeaBackendService";
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/%s?key=%s";
@@ -53,35 +60,42 @@ public class BackendService extends LocationBackendService implements WiFiBacken
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final String PROVIDER = "ichnaea";
     private static final int RATE_LIMIT_MS = 5000;
-    private static final long SWITCH_ON_FRESHNESS_CLIFF_MS = 30000; // 30 seconds
-    public static final int LOCATION_ACCURACY_THRESHOLD = 50;
+    private static final long SWITCH_ON_FRESHNESS_CLIFF_MS = 30000;
+    private static final int LOCATION_ACCURACY_THRESHOLD = 50;
 
-    private WiFiBackendHelper backendHelper;
+    private static BackendService instance;
+
     private boolean running = false;
-    private Set<WiFiBackendHelper.WiFi> wiFis;
+    private Set<WiFi> wiFis;
+    private Set<Cell> cells;
     private Thread thread;
     private long lastRequest = 0;
+
     private String nickname = "µg User";
     private boolean submit = false;
+    private boolean useWiFis = true;
+    private boolean useCells = true;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        backendHelper = new WiFiBackendHelper(this, this);
-    }
-
-    @Override
-    protected Location update() {
-        backendHelper.onUpdate();
-        return null;
     }
 
     @Override
     protected synchronized void onOpen() {
-        Log.d(TAG, "onOpen");
-        backendHelper.onOpen();
+        super.onOpen();
         reloadSettings();
+        instance = this;
         running = true;
+        Log.d(TAG, "Activating instance at process " + Process.myPid());
+    }
+
+    public static void reloadInstanceSttings() {
+        if (instance != null) {
+            instance.reloadSettings();
+        } else {
+            Log.d(TAG, "No instance found active.");
+        }
     }
 
     private void reloadSettings() {
@@ -104,27 +118,46 @@ public class BackendService extends LocationBackendService implements WiFiBacken
             submit = preferences.getBoolean("submit_data", false);
             nickname = preferences.getString("nickname", "µg User");
             if (submit) Log.d(TAG, "Contributing with nickname \"" + nickname + "\"");
+            useCells = preferences.getBoolean("use_cells", true)
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1;
+            useWiFis = preferences.getBoolean("use_wifis", true);
         }
+        removeHelpers();
+        if (useCells) addHelper(new CellBackendHelper(this, this));
+        if (!useCells) cells = null;
+        if (useWiFis) addHelper(new WiFiBackendHelper(this, this));
+        if (!useWiFis) wiFis = null;
     }
 
     @Override
     protected synchronized void onClose() {
-        Log.d(TAG, "onClose");
+        super.onClose();
         running = false;
-        backendHelper.onClose();
+        if (instance == this) {
+            instance = null;
+            Log.d(TAG, "Deactivating instance at process " + Process.myPid());
+        }
     }
 
     @Override
-    public void onWiFisChanged(Set<WiFiBackendHelper.WiFi> wiFis) {
+    public void onWiFisChanged(Set<WiFi> wiFis) {
         this.wiFis = wiFis;
+        if (running) startCalculate();
+    }
+
+    @Override
+    public void onCellsChanged(Set<Cell> cells) {
+        this.cells = cells;
+        Log.d(TAG, "Cells: " + cells.size());
         if (running) startCalculate();
     }
 
     private synchronized void startCalculate() {
         if (thread != null) return;
         if (lastRequest + RATE_LIMIT_MS > System.currentTimeMillis()) return;
-        final Set<WiFiBackendHelper.WiFi> wiFis = this.wiFis;
-        if (wiFis.size() < 2) return;
+        final Set<WiFi> wiFis = this.wiFis;
+        final Set<Cell> cells = this.cells;
+        if ((cells == null || cells.isEmpty()) && (wiFis == null || wiFis.size() < 2)) return;
         thread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -153,7 +186,7 @@ public class BackendService extends LocationBackendService implements WiFiBacken
                             }
                         }
                     }
-                    String request = createRequest(null, wiFis, l);
+                    String request = createRequest(cells, wiFis, l);
                     Log.d(TAG, "request: " + request);
                     conn.getOutputStream().write(request.getBytes());
                     String r = new String(readStreamToEnd(conn.getInputStream()));
@@ -202,8 +235,42 @@ public class BackendService extends LocationBackendService implements WiFiBacken
         return bos.toByteArray();
     }
 
-    private String createRequest(Object cells, Set<WiFiBackendHelper.WiFi> wiFis,
-                                 Location currentLocation) throws JSONException {
+    /**
+     * see https://mozilla-ichnaea.readthedocs.org/en/latest/cell.html
+     */
+    @SuppressWarnings("MagicNumber")
+    private static int calculateAsu(Cell cell) {
+        switch (cell.getType()) {
+            case GSM:
+                return Math.max(0, Math.min(31, (cell.getSignal() + 113) / 2));
+            case UMTS:
+                return Math.max(-5, Math.max(91, cell.getSignal() + 116));
+            case LTE:
+                return Math.max(0, Math.min(95, cell.getSignal() + 140));
+            case CDMA:
+                int signal = cell.getSignal();
+                if (signal >= -75) {
+                    return 16;
+                }
+                if (signal >= -82) {
+                    return 8;
+                }
+                if (signal >= -90) {
+                    return 4;
+                }
+                if (signal >= -95) {
+                    return 2;
+                }
+                if (signal >= -100) {
+                    return 1;
+                }
+                return 0;
+        }
+        return 0;
+    }
+
+    private static String createRequest(Set<Cell> cells, Set<WiFi> wiFis,
+                                        Location currentLocation) throws JSONException {
         JSONObject jsonObject = new JSONObject();
         if (currentLocation != null) {
             jsonObject.put("latitude", currentLocation.getLatitude());
@@ -213,20 +280,39 @@ public class BackendService extends LocationBackendService implements WiFiBacken
             if (currentLocation.hasAltitude())
                 jsonObject.put("altitude", currentLocation.getAltitude());
         }
-        //jsonObject.put("radioType", radioType);
         JSONArray cellTowers = new JSONArray();
-        // TODO cells
-        JSONArray wifiAccessPoints = new JSONArray();
-        for (WiFiBackendHelper.WiFi wiFi : wiFis) {
-            JSONObject wifiAccessPoint = new JSONObject();
-            wifiAccessPoint.put("macAddress", wiFi.getBssid());
-            wifiAccessPoint.put("signalStrength", wiFi.getRssi());
-            //wifiAccessPoint.put("age", age);
-            //wifiAccessPoint.put("channel", channel);
-            //wifiAccessPoint.put("signalToNoiseRatio", signalToNoiseRatio);
-            wifiAccessPoints.put(wifiAccessPoint);
+        if (cells != null) {
+            for (Cell cell : cells) {
+                if (cell.getType() == Cell.CellType.CDMA) {
+                    jsonObject.put("radioType", "cdma");
+                } else {
+                    jsonObject.put("radioType", "gsm");
+                }
+                JSONObject cellTower = new JSONObject();
+                cellTower.put("radioType", cell.getType().toString().toLowerCase());
+                cellTower.put("mobileCountryCode", cell.getMcc());
+                cellTower.put("mobileNetworkCode", cell.getMnc());
+                cellTower.put("locationAreaCode", cell.getLac());
+                cellTower.put("cellId", cell.getCid());
+                cellTower.put("signalStrength", cell.getSignal());
+                if (cell.getPsc() != -1)
+                    cellTower.put("psc", cell.getPsc());
+                cellTower.put("asu", calculateAsu(cell));
+                cellTowers.put(cellTower);
+            }
         }
-        if (wifiAccessPoints.length() < 2 && cellTowers.length() == 0) return null;
+        JSONArray wifiAccessPoints = new JSONArray();
+        if (wiFis != null) {
+            for (WiFi wiFi : wiFis) {
+                JSONObject wifiAccessPoint = new JSONObject();
+                wifiAccessPoint.put("macAddress", wiFi.getBssid());
+                wifiAccessPoint.put("signalStrength", wiFi.getRssi());
+                //wifiAccessPoint.put("age", age);
+                //wifiAccessPoint.put("channel", channel);
+                //wifiAccessPoint.put("signalToNoiseRatio", signalToNoiseRatio);
+                wifiAccessPoints.put(wifiAccessPoint);
+            }
+        }
         jsonObject.put("cellTowers", cellTowers);
         jsonObject.put("wifiAccessPoints", wifiAccessPoints);
         return jsonObject.toString();
