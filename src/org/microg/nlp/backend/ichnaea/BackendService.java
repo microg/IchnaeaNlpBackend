@@ -43,6 +43,7 @@ import org.microg.nlp.api.WiFiBackendHelper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.Set;
@@ -71,7 +72,7 @@ public class BackendService extends HelperLocationBackendService
     private Thread thread;
     private long lastRequest = 0;
 
-    private String nickname = "µg User";
+    private String nickname = "";
     private boolean submit = false;
     private boolean useWiFis = true;
     private boolean useCells = true;
@@ -116,8 +117,10 @@ public class BackendService extends HelperLocationBackendService
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(0, notification);
         } else {
             submit = preferences.getBoolean("submit_data", false);
-            nickname = preferences.getString("nickname", "µg User");
-            if (submit) Log.d(TAG, "Contributing with nickname \"" + nickname + "\"");
+            nickname = preferences.getString("nickname", null);
+            if (nickname == null) nickname = "";
+            if (submit) 
+                 Log.d(TAG, "Contributing with nickname \"" + nickname + "\"");
             useCells = preferences.getBoolean("use_cells", true)
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1;
             useWiFis = preferences.getBoolean("use_wifis", true);
@@ -161,15 +164,16 @@ public class BackendService extends HelperLocationBackendService
         thread = new Thread(new Runnable() {
             @Override
             public void run() {
+                HttpURLConnection conn = null;
                 try {
-                    URLConnection conn = new URL(String.format(SERVICE_URL,
+                    conn = (HttpURLConnection) new URL(String.format(SERVICE_URL,
                             submit ? SERVICE_TYPE_SUBMIT : SERVICE_TYPE_LOCATE, API_KEY))
                             .openConnection();
                     conn.setDoOutput(true);
                     conn.setDoInput(true);
                     Location l = null;
                     if (submit) {
-                        conn.setRequestProperty("X-Nickname", nickname);
+                        if (!nickname.isEmpty()) conn.setRequestProperty("X-Nickname", nickname);
                         LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
                         for (String provider : lm.getAllProviders()) {
                             Location temp = lm.getLastKnownLocation(provider);
@@ -182,7 +186,6 @@ public class BackendService extends HelperLocationBackendService
                                         temp.getTime() > l.getTime() + SWITCH_ON_FRESHNESS_CLIFF_MS) {
                                     l = temp;
                                 }
-
                             }
                         }
                     }
@@ -196,20 +199,24 @@ public class BackendService extends HelperLocationBackendService
                     double lon = response.getJSONObject("location").getDouble("lng");
                     double acc = response.getDouble("accuracy");
                     report(LocationHelper.create(PROVIDER, lat, lon, (float) acc));
-                } catch (IOException |
-                        JSONException e
-                        )
-
-                {
+                } catch (IOException | JSONException e) {
+                    if (conn != null) {
+                        InputStream is = conn.getErrorStream();
+                        if (is != null) {
+                            try {
+                                String error = new String(readStreamToEnd(is));
+                                Log.w(TAG, "Error: "+error);
+                            } catch (Exception ignored) {
+                            }
+                        }
+                    }
                     Log.w(TAG, e);
                 }
 
                 lastRequest = System.currentTimeMillis();
                 thread = null;
             }
-        }
-
-        );
+        });
         thread.start();
     }
 
@@ -268,6 +275,20 @@ public class BackendService extends HelperLocationBackendService
         }
         return 0;
     }
+    
+    private static String getRadioType(Cell cell) {
+        switch (cell.getType()) {
+            case CDMA:
+                return "cdma";
+            case LTE:
+                return "lte";
+            case UMTS:
+                return "wcdma";
+            case GSM:
+            default:
+                return "gsm";
+        }
+    }
 
     private static String createRequest(Set<Cell> cells, Set<WiFi> wiFis,
                                         Location currentLocation) throws JSONException {
@@ -281,15 +302,21 @@ public class BackendService extends HelperLocationBackendService
                 jsonObject.put("altitude", currentLocation.getAltitude());
         }
         JSONArray cellTowers = new JSONArray();
+        
         if (cells != null) {
+            Cell.CellType lastType = null;
             for (Cell cell : cells) {
                 if (cell.getType() == Cell.CellType.CDMA) {
                     jsonObject.put("radioType", "cdma");
+                } else if (lastType != null && lastType != cell.getType()) {
+                    // We can't contribute if different cell types are mixed.
+                    jsonObject.put("radioType", null);
                 } else {
-                    jsonObject.put("radioType", "gsm");
+                    jsonObject.put("radioType", getRadioType(cell));
                 }
+                lastType = cell.getType();
                 JSONObject cellTower = new JSONObject();
-                cellTower.put("radioType", cell.getType().toString().toLowerCase());
+                cellTower.put("radioType", getRadioType(cell));
                 cellTower.put("mobileCountryCode", cell.getMcc());
                 cellTower.put("mobileNetworkCode", cell.getMnc());
                 cellTower.put("locationAreaCode", cell.getLac());

@@ -27,7 +27,7 @@
             android:key="nickname"
             android:title="@string/pref_title_nickname"
             android:summary="@string/pref_description_nickname"
-            android:defaultValue="µg User" />
+            android:defaultValue="" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/pref_category_source">

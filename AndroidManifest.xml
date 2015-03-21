@@ -15,12 +15,12 @@
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.microg.nlp.backend.ichnaea"
-    android:versionCode="1001"
-    android:versionName="0.10.1">
+    android:versionCode="1002"
+    android:versionName="0.10.2">
 
     <uses-sdk
         android:minSdkVersion="10"
-        android:targetSdkVersion="21" />
+        android:targetSdkVersion="22" />
 
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
