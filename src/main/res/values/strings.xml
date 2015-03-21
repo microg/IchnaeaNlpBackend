@@ -29,7 +29,7 @@
     <string name="pref_title_use_wifis">Use Wi-Fi</string>
     <string name="pref_description_use_wifis">Whether to send Wi-Fi data to the geolocation service</string>
     <string name="pref_title_use_cells">Use Cell (GSM/UMTS/LTE/CDMA)</string>
-    <string name="pref_description_use_cells">Whether to send Cell data to the geolocation service.\nThis requires atleast Android 4.2 and does not work properly on all devices.</string>
+    <string name="pref_description_use_cells">Whether to send Cell data to the geolocation service.\nThis requires Android 4.2 or later.</string>
 
     <string name="first_time_notification_title">Contribute to Mozilla Location Service</string>
     <string name="first_time_notification_content"><![CDATA[ Mozilla Location Service is a free, user-powered location database.<br>
