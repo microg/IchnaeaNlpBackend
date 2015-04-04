@@ -15,9 +15,9 @@
   -->
 
 <resources>
-    <string name="app_name">Ichnaea UnifiedNlp Backend</string>
-    <string name="backend_name">Ichnaea Backend</string>
-    <string name="summary">Locate using Mozilla Location Service</string>
+    <string name="app_name">Mozilla Location Service</string>
+    <string name="backend_name">Mozilla Location Service</string>
+    <string name="summary">Locate using Mozilla\'s online database</string>
 
     <string name="pref_category_submit">Data contribution</string>
     <string name="pref_title_submit_data">Contribute data</string>
