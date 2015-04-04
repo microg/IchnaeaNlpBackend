@@ -15,7 +15,7 @@
   -->
 
 <resources>
-    <string name="app_name">Mozilla Location Service</string>
+    <string name="app_name">Mozilla UnifiedNlp Backend</string>
     <string name="backend_name">Mozilla Location Service</string>
     <string name="summary">Locate using Mozilla\'s online database</string>
 

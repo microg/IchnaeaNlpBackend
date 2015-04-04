@@ -116,7 +116,7 @@ public class BackendService extends HelperLocationBackendService
                     .build();
             ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(0, notification);
         } else {
-            submit = preferences.getBoolean("submit_data", false);
+            submit = false; //preferences.getBoolean("submit_data", false);
             nickname = preferences.getString("nickname", null);
             if (nickname == null) nickname = "";
             if (submit) 
