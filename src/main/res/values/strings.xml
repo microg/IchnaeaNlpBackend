@@ -24,6 +24,8 @@
     <string name="pref_description_submit_data">Submit access point information to the public database of Mozilla Location Service</string>
     <string name="pref_title_nickname">Nickname</string>
     <string name="pref_description_nickname">Used for the leaderboard of Mozilla Location Service (when submitting)</string>
+    <string name="pref_title_install_mozstumbler">Install Mozilla Stumbler</string>
+    <string name="pref_description_install_mozstumbler">Mozilla Stumbler is a tool to contribute information to the public database of Mozilla Location Service</string>
 
     <string name="pref_category_source">Data sources</string>
     <string name="pref_title_use_wifis">Use Wi-Fi</string>
