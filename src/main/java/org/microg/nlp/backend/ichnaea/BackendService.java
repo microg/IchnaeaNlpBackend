@@ -16,20 +16,11 @@
 
 package org.microg.nlp.backend.ichnaea;
 
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.Build;
 import android.os.Process;
 import android.preference.PreferenceManager;
-import android.support.v4.app.NotificationCompat;
-import android.text.Html;
-import android.text.Spanned;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -45,7 +36,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.Set;
 
 import static org.microg.nlp.api.CellBackendHelper.Cell;
@@ -55,9 +45,7 @@ public class BackendService extends HelperLocationBackendService
         implements WiFiBackendHelper.Listener, CellBackendHelper.Listener {
 
     private static final String TAG = "IchnaeaBackendService";
-    private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/%s?key=%s";
-    private static final String SERVICE_TYPE_SUBMIT = "geosubmit";
-    private static final String SERVICE_TYPE_LOCATE = "geolocate";
+    private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final String PROVIDER = "ichnaea";
     private static final int RATE_LIMIT_MS = 5000;
@@ -72,8 +60,6 @@ public class BackendService extends HelperLocationBackendService
     private Thread thread;
     private long lastRequest = 0;
 
-    private String nickname = "";
-    private boolean submit = false;
     private boolean useWiFis = true;
     private boolean useCells = true;
 
@@ -100,36 +86,18 @@ public class BackendService extends HelperLocationBackendService
     }
 
     private void reloadSettings() {
-        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        if (!preferences.contains("submit_data")) {
-            Spanned message = Html.fromHtml(getString(R.string.first_time_notification_content));
-            PendingIntent pi = PendingIntent.getActivity(this, 0,
-                    new Intent(this, SettingsActivity.class), PendingIntent.FLAG_ONE_SHOT);
-            Notification notification = new NotificationCompat.Builder(this)
-                    .setContentText(message)
-                    .setContentTitle(getString(R.string.first_time_notification_title))
-                    .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-                    .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
-                    .setContentIntent(pi)
-                    .setAutoCancel(true)
-                    .setWhen(0)
-                    .build();
-            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(0, notification);
-        } else {
-            submit = false; //preferences.getBoolean("submit_data", false);
-            nickname = preferences.getString("nickname", null);
-            if (nickname == null) nickname = "";
-            if (submit) 
-                 Log.d(TAG, "Contributing with nickname \"" + nickname + "\"");
-            useCells = preferences.getBoolean("use_cells", true)
-                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1;
-            useWiFis = preferences.getBoolean("use_wifis", true);
-        }
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         removeHelpers();
-        if (useCells) addHelper(new CellBackendHelper(this, this));
-        if (!useCells) cells = null;
-        if (useWiFis) addHelper(new WiFiBackendHelper(this, this));
-        if (!useWiFis) wiFis = null;
+        if (preferences.getBoolean("use_cells", true) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            addHelper(new CellBackendHelper(this, this));
+        } else {
+            cells = null;
+        }
+        if (preferences.getBoolean("use_wifis", true)) {
+            addHelper(new WiFiBackendHelper(this, this));
+        } else {
+            wiFis = null;
+        }
     }
 
     @Override
@@ -166,30 +134,10 @@ public class BackendService extends HelperLocationBackendService
             public void run() {
                 HttpURLConnection conn = null;
                 try {
-                    conn = (HttpURLConnection) new URL(String.format(SERVICE_URL,
-                            submit ? SERVICE_TYPE_SUBMIT : SERVICE_TYPE_LOCATE, API_KEY))
-                            .openConnection();
+                    conn = (HttpURLConnection) new URL(String.format(SERVICE_URL, API_KEY)).openConnection();
                     conn.setDoOutput(true);
                     conn.setDoInput(true);
-                    Location l = null;
-                    if (submit) {
-                        if (!nickname.isEmpty()) conn.setRequestProperty("X-Nickname", nickname);
-                        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                        for (String provider : lm.getAllProviders()) {
-                            Location temp = lm.getLastKnownLocation(provider);
-                            if (temp != null && temp.hasAccuracy() &&
-                                    temp.getAccuracy() < LOCATION_ACCURACY_THRESHOLD &&
-                                    temp.getTime() + RATE_LIMIT_MS > System.currentTimeMillis()) {
-                                if (l == null) {
-                                    l = temp;
-                                } else if (temp.getAccuracy() < l.getAccuracy() ||
-                                        temp.getTime() > l.getTime() + SWITCH_ON_FRESHNESS_CLIFF_MS) {
-                                    l = temp;
-                                }
-                            }
-                        }
-                    }
-                    String request = createRequest(cells, wiFis, l);
+                    String request = createRequest(cells, wiFis);
                     Log.d(TAG, "request: " + request);
                     conn.getOutputStream().write(request.getBytes());
                     String r = new String(readStreamToEnd(conn.getInputStream()));
@@ -205,7 +153,7 @@ public class BackendService extends HelperLocationBackendService
                         if (is != null) {
                             try {
                                 String error = new String(readStreamToEnd(is));
-                                Log.w(TAG, "Error: "+error);
+                                Log.w(TAG, "Error: " + error);
                             } catch (Exception ignored) {
                             }
                         }
@@ -275,7 +223,7 @@ public class BackendService extends HelperLocationBackendService
         }
         return 0;
     }
-    
+
     private static String getRadioType(Cell cell) {
         switch (cell.getType()) {
             case CDMA:
@@ -290,19 +238,10 @@ public class BackendService extends HelperLocationBackendService
         }
     }
 
-    private static String createRequest(Set<Cell> cells, Set<WiFi> wiFis,
-                                        Location currentLocation) throws JSONException {
+    private static String createRequest(Set<Cell> cells, Set<WiFi> wiFis) throws JSONException {
         JSONObject jsonObject = new JSONObject();
-        if (currentLocation != null) {
-            jsonObject.put("latitude", currentLocation.getLatitude());
-            jsonObject.put("longitude", currentLocation.getLongitude());
-            if (currentLocation.hasAccuracy())
-                jsonObject.put("accuracy", currentLocation.getAccuracy() + LOCATION_ACCURACY_THRESHOLD);
-            if (currentLocation.hasAltitude())
-                jsonObject.put("altitude", currentLocation.getAltitude());
-        }
         JSONArray cellTowers = new JSONArray();
-        
+
         if (cells != null) {
             Cell.CellType lastType = null;
             for (Cell cell : cells) {
@@ -333,15 +272,17 @@ public class BackendService extends HelperLocationBackendService
             for (WiFi wiFi : wiFis) {
                 JSONObject wifiAccessPoint = new JSONObject();
                 wifiAccessPoint.put("macAddress", wiFi.getBssid());
-                wifiAccessPoint.put("signalStrength", wiFi.getRssi());
                 //wifiAccessPoint.put("age", age);
-                //wifiAccessPoint.put("channel", channel);
+                if (wiFi.getChannel() != -1) wifiAccessPoint.put("channel", wiFi.getChannel());
+                if (wiFi.getFrequency() != -1) wifiAccessPoint.put("frequency", wiFi.getFrequency());
+                wifiAccessPoint.put("signalStrength", wiFi.getRssi());
                 //wifiAccessPoint.put("signalToNoiseRatio", signalToNoiseRatio);
                 wifiAccessPoints.put(wifiAccessPoint);
             }
         }
         jsonObject.put("cellTowers", cellTowers);
         jsonObject.put("wifiAccessPoints", wifiAccessPoints);
+        jsonObject.put("fallbacks", new JSONObject().put("lacf", true).put("ipf", false));
         return jsonObject.toString();
     }
 }
