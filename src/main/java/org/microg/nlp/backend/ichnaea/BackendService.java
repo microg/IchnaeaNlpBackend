@@ -49,8 +49,6 @@ public class BackendService extends HelperLocationBackendService
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final String PROVIDER = "ichnaea";
     private static final int RATE_LIMIT_MS = 5000;
-    private static final long SWITCH_ON_FRESHNESS_CLIFF_MS = 30000;
-    private static final int LOCATION_ACCURACY_THRESHOLD = 50;
 
     private static BackendService instance;
 
