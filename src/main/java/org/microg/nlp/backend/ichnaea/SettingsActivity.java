@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2015 µg Project Team
+ * Copyright 2013-2016 microG Project Team
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,6 @@ public class SettingsActivity extends PreferenceActivity {
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "Preferences paused, reloading backend settings");
-        BackendService.reloadInstanceSttings();
+        BackendService.reloadInstanceSettings();
     }
 }

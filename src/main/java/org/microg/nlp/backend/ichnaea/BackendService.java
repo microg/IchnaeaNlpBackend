@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2015 µg Project Team
+ * Copyright 2013-2016 microG Project Team
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,8 +62,10 @@ public class BackendService extends HelperLocationBackendService
     private boolean useCells = true;
 
     @Override
-    public void onCreate() {
+    public synchronized void onCreate() {
         super.onCreate();
+        reloadSettings();
+        reloadInstanceSettings();
     }
 
     @Override
@@ -75,7 +77,7 @@ public class BackendService extends HelperLocationBackendService
         Log.d(TAG, "Activating instance at process " + Process.myPid());
     }
 
-    public static void reloadInstanceSttings() {
+    public static void reloadInstanceSettings() {
         if (instance != null) {
             instance.reloadSettings();
         } else {
