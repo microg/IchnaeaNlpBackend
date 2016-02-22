@@ -1,5 +1,7 @@
 IchnaeaNlpBackend
 ===================
+[![Build Status](https://travis-ci.org/microg/IchnaeaNlpBackend.svg?branch=master)](https://travis-ci.org/microg/IchnaeaNlpBackend)
+
 [UnifiedNlp](https://github.com/microg/android_packages_apps_UnifiedNlp) backend that uses [Mozilla Location Services](https://location.services.mozilla.com/) to resolve locations.
 
 License
