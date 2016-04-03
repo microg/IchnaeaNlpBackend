@@ -23,6 +23,12 @@ buildscript {
     }
 }
 
+/* This is a hack, trying to provide release updates to F-Droid until it can properly handle Gradle
+applicationId "org.microg.nlp.backend.ichnaea"
+versionName "v1.3.1"
+versionCode "20017"
+ */
+
 apply plugin: 'com.android.application'
 
 String getMyVersionName() {
@@ -48,8 +54,7 @@ repositories {
 }
 
 dependencies {
-    compile 'org.microg:unifiednlp-api:1.5.0'
-    compile 'com.android.support:support-v4:23.1.1'
+    compile 'org.microg:unifiednlp-api:1.5.3'
 }
 
 android {
