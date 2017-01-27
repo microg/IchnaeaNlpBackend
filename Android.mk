@@ -2,14 +2,14 @@ LOCAL_PATH:= $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE := IchnaeaNlp
+LOCAL_MODULE := IchnaeaNlpBackend
 LOCAL_MODULE_TAGS := optional
-LOCAL_PACKAGE_NAME := IchnaeaNlp
+LOCAL_PACKAGE_NAME := IchnaeaNlpBackend
 
 ichnaea_root  := $(LOCAL_PATH)
 ichnaea_out   := $(OUT_DIR)/target/common/obj/APPS/$(LOCAL_MODULE)_intermediates
 ichnaea_build := $(ichnaea_root)/build
-ichnaea_apk   := build/outputs/apk/IchnaeaNlp-release-unsigned.apk
+ichnaea_apk   := build/outputs/apk/IchnaeaNlpBackend-release-unsigned.apk
 
 $(ichnaea_root)/$(ichnaea_apk):
 	rm -Rf $(ichnaea_build)
