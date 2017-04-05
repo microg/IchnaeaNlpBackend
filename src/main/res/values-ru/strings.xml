@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright 2013-2016 microG Project Team
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<resources>
+    <string name="app_name">Mozilla UnifiedNlp Backend</string>
+    <string name="backend_name">Геолокационный сервис Mozilla</string>
+    <string name="summary">Обнаружение, используя онлайн базу данных Mozilla</string>
+
+    <string name="pref_category_submit">Отправка данных</string>
+    <string name="pref_title_submit_data">Отправлять данные</string>
+    <string name="pref_description_submit_data">Отправлять информацию о точках доступа в открытую базу данных геолокационного сервиса Mozilla</string>
+    <string name="pref_title_nickname">Псевдоним</string>
+    <string name="pref_description_nickname">Будет использован в таблице лидеров геолокационного сервиса Mozilla (при внесении данных)</string>
+    <string name="pref_title_install_mozstumbler">Установить Mozilla Stumbler</string>
+    <string name="pref_description_install_mozstumbler">Mozilla Stumbler – инструмент, позволяющий вносить свой вклад в открытую базу данных геолокационного сервиса Mozilla</string>
+
+    <string name="pref_category_source">Источники данных</string>
+    <string name="pref_title_use_wifis">Использовать Wi-Fi</string>
+    <string name="pref_description_use_wifis">Отправлять ли данные Wi-Fi геолокационному сервису</string>
+    <string name="pref_title_use_cells">Использовать сотовую связь (GSM/UMTS/LTE/CDMA)</string>
+    <string name="pref_description_use_cells">Отправлять ли данные сотовой связи геолокационному сервису.\nТребуется Android 4.2 или более новый.</string>
+
+    <string name="first_time_notification_title">Вклад в геолокационный сервис Mozilla</string>
+    <string name="first_time_notification_content"><![CDATA[ Геолокационный сервис Mozilla – это свободная, движимая пользователями база данных.<br>
+Ichnaea Backend позволяет вносить вклад в базу данных, таким образом увеличивая точность геолокации для всех пользователей без дополнительной траты батареи или трафика.<br>
+<b>Нажмите здесь, чтобы открыть настройки и включить отправку данных.</b> Спасибо.]]></string>
+</resources>
