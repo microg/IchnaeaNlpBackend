@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2016 microG Project Team
+ * Copyright (C) 2013-2017 microG Project Team
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ public class BackendService extends HelperLocationBackendService
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final String PROVIDER = "ichnaea";
-    private static final int RATE_LIMIT_MS = 5000;
+    private static final int RATE_LIMIT_MS = 10000;
 
     private static BackendService instance;
 
@@ -56,10 +56,14 @@ public class BackendService extends HelperLocationBackendService
     private Set<WiFi> wiFis;
     private Set<Cell> cells;
     private Thread thread;
-    private long lastRequest = 0;
+    private long lastRequestTime = 0;
 
     private boolean useWiFis = true;
     private boolean useCells = true;
+
+    private boolean replay = false;
+    private String lastRequest = null;
+    private Location lastResponse = null;
 
     @Override
     public synchronized void onCreate() {
@@ -123,55 +127,72 @@ public class BackendService extends HelperLocationBackendService
         if (running) startCalculate();
     }
 
+    @Override
+    protected synchronized Location update() {
+        replay = true; // We need to replay to ensure apps think they are up-to-date.
+        return super.update();
+    }
+
     private synchronized void startCalculate() {
         if (thread != null) return;
-        if (lastRequest + RATE_LIMIT_MS > System.currentTimeMillis()) return;
+        if (lastRequestTime + RATE_LIMIT_MS > System.currentTimeMillis()) return;
         final Set<WiFi> wiFis = this.wiFis;
         final Set<Cell> cells = this.cells;
         if ((cells == null || cells.isEmpty()) && (wiFis == null || wiFis.size() < 2)) return;
-        thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                HttpURLConnection conn = null;
-                try {
-                    conn = (HttpURLConnection) new URL(String.format(SERVICE_URL, API_KEY)).openConnection();
-                    conn.setDoOutput(true);
-                    conn.setDoInput(true);
-                    String request = createRequest(cells, wiFis);
-                    Log.d(TAG, "request: " + request);
-                    conn.getOutputStream().write(request.getBytes());
-                    String r = new String(readStreamToEnd(conn.getInputStream()));
-                    Log.d(TAG, "response: " + r);
-                    JSONObject response = new JSONObject(r);
-                    double lat = response.getJSONObject("location").getDouble("lat");
-                    double lon = response.getJSONObject("location").getDouble("lng");
-                    double acc = response.getDouble("accuracy");
-                    report(LocationHelper.create(PROVIDER, lat, lon, (float) acc));
-                } catch (IOException | JSONException e) {
-                    if (conn != null) {
-                        InputStream is = conn.getErrorStream();
-                        if (is != null) {
-                            try {
-                                String error = new String(readStreamToEnd(is));
-                                Log.w(TAG, "Error: " + error);
-                            } catch (Exception ignored) {
+        try {
+            final String request = createRequest(cells, wiFis);
+            if (request.equals(lastRequest)) {
+                if (replay) {
+                    Log.d(TAG, "No data changes, replaying location " + lastResponse);
+                    lastResponse = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
+                    report(lastResponse);
+                }
+                return;
+            }
+            replay = false;
+            thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    HttpURLConnection conn = null;
+                    Location response = null;
+                    try {
+                        conn = (HttpURLConnection) new URL(String.format(SERVICE_URL, API_KEY)).openConnection();
+                        conn.setDoOutput(true);
+                        conn.setDoInput(true);
+                        Log.d(TAG, "request: " + request);
+                        conn.getOutputStream().write(request.getBytes());
+                        String r = new String(readStreamToEnd(conn.getInputStream()));
+                        Log.d(TAG, "response: " + r);
+                        JSONObject responseJson = new JSONObject(r);
+                        double lat = responseJson.getJSONObject("location").getDouble("lat");
+                        double lon = responseJson.getJSONObject("location").getDouble("lng");
+                        double acc = responseJson.getDouble("accuracy");
+                        response = LocationHelper.create(PROVIDER, lat, lon, (float) acc);
+                        report(response);
+                    } catch (IOException | JSONException e) {
+                        if (conn != null) {
+                            InputStream is = conn.getErrorStream();
+                            if (is != null) {
+                                try {
+                                    String error = new String(readStreamToEnd(is));
+                                    Log.w(TAG, "Error: " + error);
+                                } catch (Exception ignored) {
+                                }
                             }
                         }
+                        Log.w(TAG, e);
                     }
-                    Log.w(TAG, e);
+
+                    lastRequest = request;
+                    lastResponse = response;
+                    lastRequestTime = System.currentTimeMillis();
+                    thread = null;
                 }
-
-                lastRequest = System.currentTimeMillis();
-                thread = null;
-            }
-        });
-        thread.start();
-    }
-
-    @Override
-    public void report(Location location) {
-        Log.d(TAG, "reporting: " + location);
-        super.report(location);
+            });
+            thread.start();
+        } catch (Exception e) {
+            Log.w(TAG, e);
+        }
     }
 
     private static byte[] readStreamToEnd(InputStream is) throws IOException {
@@ -274,7 +295,8 @@ public class BackendService extends HelperLocationBackendService
                 wifiAccessPoint.put("macAddress", wiFi.getBssid());
                 //wifiAccessPoint.put("age", age);
                 if (wiFi.getChannel() != -1) wifiAccessPoint.put("channel", wiFi.getChannel());
-                if (wiFi.getFrequency() != -1) wifiAccessPoint.put("frequency", wiFi.getFrequency());
+                if (wiFi.getFrequency() != -1)
+                    wifiAccessPoint.put("frequency", wiFi.getFrequency());
                 wifiAccessPoint.put("signalStrength", wiFi.getRssi());
                 //wifiAccessPoint.put("signalToNoiseRatio", signalToNoiseRatio);
                 wifiAccessPoints.put(wifiAccessPoint);
