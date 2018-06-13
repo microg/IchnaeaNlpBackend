@@ -44,10 +44,11 @@ public class BackendService extends HelperLocationBackendService
     private static final String TAG = "IchnaeaBackendService";
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
-    private static final long RATE_LIMIT_MS_FLOOR = 10000;
+    private static final long RATE_LIMIT_MS_FLOOR = 60000;
+    private static final long RATE_LIMIT_MS_PADDING = 10000;
     private static final String PROVIDER = "ichnaea";
 
-    private long EXP_BACKOFF_RATE = 1;
+    private long EXP_BACKOFF_FACTOR = 0;
 
     private static BackendService instance;
 
@@ -73,7 +74,7 @@ public class BackendService extends HelperLocationBackendService
 
     @Override
     public synchronized boolean canRun() {
-        long delay = RATE_LIMIT_MS_FLOOR * EXP_BACKOFF_RATE;
+        long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * EXP_BACKOFF_FACTOR);
         return (lastRequestTime + delay > System.currentTimeMillis());
     }
 
@@ -81,15 +82,20 @@ public class BackendService extends HelperLocationBackendService
 
     @Override
     public synchronized void extendBackoff() {
-        if (EXP_BACKOFF_RATE < 1024) {
-            EXP_BACKOFF_RATE *= 2;
+        if (EXP_BACKOFF_FACTOR == 0) {
+            EXP_BACKOFF_FACTOR = 1;
+        } else if (EXP_BACKOFF_FACTOR > 0 && EXP_BACKOFF_FACTOR < 1024) {
+            EXP_BACKOFF_FACTOR *= 2;
         }
     }
 
     @Override
     public synchronized void reduceBackoff() {
-        if (EXP_BACKOFF_RATE > 1) {
-            EXP_BACKOFF_RATE /= 2;
+        if (EXP_BACKOFF_FACTOR == 1) {
+            // Turn the exponential backoff off entirely
+            EXP_BACKOFF_FACTOR = 0;
+        } else {
+            EXP_BACKOFF_FACTOR /= 2;
         }
     }
 
