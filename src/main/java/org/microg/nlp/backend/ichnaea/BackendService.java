@@ -31,45 +31,88 @@ import org.microg.nlp.api.HelperLocationBackendService;
 import org.microg.nlp.api.LocationHelper;
 import org.microg.nlp.api.WiFiBackendHelper;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.Set;
 
 import static org.microg.nlp.api.CellBackendHelper.Cell;
 import static org.microg.nlp.api.WiFiBackendHelper.WiFi;
 
 public class BackendService extends HelperLocationBackendService
-        implements WiFiBackendHelper.Listener, CellBackendHelper.Listener {
+        implements WiFiBackendHelper.Listener, 
+                   CellBackendHelper.Listener,
+                   LocationCallback {
 
     private static final String TAG = "IchnaeaBackendService";
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
+    private static final long RATE_LIMIT_MS_FLOOR = 60000;
+    private static final long RATE_LIMIT_MS_PADDING = 10000;
     private static final String PROVIDER = "ichnaea";
-    private static final int RATE_LIMIT_MS = 10000;
+
+    private long expBackoffFactor = 0;
 
     private static BackendService instance;
 
     private boolean running = false;
     private Set<WiFi> wiFis;
     private Set<Cell> cells;
-    private Thread thread;
     private long lastRequestTime = 0;
 
     private boolean useWiFis = true;
     private boolean useCells = true;
 
-    private boolean replay = false;
     private String lastRequest = null;
     private Location lastResponse = null;
+
 
     @Override
     public synchronized void onCreate() {
         super.onCreate();
         reloadSettings();
         reloadInstanceSettings();
+
+    }
+
+    @Override
+    public synchronized boolean canRun() {
+        long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * expBackoffFactor);
+        return (lastRequestTime + delay > System.currentTimeMillis());
+    }
+
+    // Methods to extend or reduce the backoff time
+
+    @Override
+    public synchronized void extendBackoff() {
+        if (expBackoffFactor == 0) {
+            expBackoffFactor = 1;
+        } else if (expBackoffFactor > 0 && expBackoffFactor < 1024) {
+            expBackoffFactor *= 2;
+        }
+    }
+
+    @Override
+    public synchronized void reduceBackoff() {
+        if (expBackoffFactor == 1) {
+            // Turn the exponential backoff off entirely
+            expBackoffFactor = 0;
+        } else {
+            expBackoffFactor /= 2;
+        }
+    }
+
+    @Override
+    public synchronized void resultCallback(Location locationResult) {
+        if (locationResult == null) {
+            if (lastResponse == null) {
+                // There isn't even a lastResponse to work with
+                Log.d(TAG, "No previous location to replay");
+                return;
+            }
+            locationResult = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
+            Log.d(TAG, "Replaying location " + locationResult);
+        }
+        lastRequestTime = System.currentTimeMillis();
+        lastResponse  = locationResult;
+        report(locationResult);
     }
 
     @Override
@@ -117,99 +160,45 @@ public class BackendService extends HelperLocationBackendService
     @Override
     public void onWiFisChanged(Set<WiFi> wiFis) {
         this.wiFis = wiFis;
-        if (running) startCalculate();
+        if (running) {
+            startCalculate();
+        }
     }
 
     @Override
     public void onCellsChanged(Set<Cell> cells) {
         this.cells = cells;
         Log.d(TAG, "Cells: " + cells.size());
-        if (running) startCalculate();
+        if (running) {
+            startCalculate();
+        }
     }
 
     @Override
     protected synchronized Location update() {
-        replay = true; // We need to replay to ensure apps think they are up-to-date.
         return super.update();
     }
 
     private synchronized void startCalculate() {
-        if (thread != null) return;
-        if (lastRequestTime + RATE_LIMIT_MS > System.currentTimeMillis()) return;
         final Set<WiFi> wiFis = this.wiFis;
         final Set<Cell> cells = this.cells;
         if ((cells == null || cells.isEmpty()) && (wiFis == null || wiFis.size() < 2)) return;
+
         try {
             final String request = createRequest(cells, wiFis);
-            if (request.equals(lastRequest)) {
-                if (replay) {
-                    Log.d(TAG, "No data changes, replaying location " + lastResponse);
-                    lastResponse = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
-                    report(lastResponse);
-                }
+            if (!this.canRun()) {
+                this.resultCallback(null);
                 return;
+            } else {
+                IchnaeaRequester requester = new IchnaeaRequester(this, request);
+                Thread t = new Thread(requester);
+                t.start();
             }
-            replay = false;
-            thread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    HttpURLConnection conn = null;
-                    Location response = null;
-                    try {
-                        conn = (HttpURLConnection) new URL(String.format(SERVICE_URL, API_KEY)).openConnection();
-                        conn.setDoOutput(true);
-                        conn.setDoInput(true);
-                        Log.d(TAG, "request: " + request);
-                        conn.getOutputStream().write(request.getBytes());
-                        String r = new String(readStreamToEnd(conn.getInputStream()));
-                        Log.d(TAG, "response: " + r);
-                        JSONObject responseJson = new JSONObject(r);
-                        double lat = responseJson.getJSONObject("location").getDouble("lat");
-                        double lon = responseJson.getJSONObject("location").getDouble("lng");
-                        double acc = responseJson.getDouble("accuracy");
-                        response = LocationHelper.create(PROVIDER, lat, lon, (float) acc);
-                        report(response);
-                    } catch (IOException | JSONException e) {
-                        if (conn != null) {
-                            InputStream is = conn.getErrorStream();
-                            if (is != null) {
-                                try {
-                                    String error = new String(readStreamToEnd(is));
-                                    Log.w(TAG, "Error: " + error);
-                                } catch (Exception ignored) {
-                                }
-                            }
-                        }
-                        Log.w(TAG, e);
-                    }
-
-                    lastRequest = request;
-                    lastResponse = response;
-                    lastRequestTime = System.currentTimeMillis();
-                    thread = null;
-                }
-            });
-            thread.start();
         } catch (Exception e) {
             Log.w(TAG, e);
         }
     }
 
-    private static byte[] readStreamToEnd(InputStream is) throws IOException {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        if (is != null) {
-            byte[] buff = new byte[1024];
-            while (true) {
-                int nb = is.read(buff);
-                if (nb < 0) {
-                    break;
-                }
-                bos.write(buff, 0, nb);
-            }
-            is.close();
-        }
-        return bos.toByteArray();
-    }
 
     /**
      * see https://mozilla-ichnaea.readthedocs.org/en/latest/cell.html
