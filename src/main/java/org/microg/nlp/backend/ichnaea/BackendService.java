@@ -39,14 +39,14 @@ import static org.microg.nlp.api.WiFiBackendHelper.WiFi;
 public class BackendService extends HelperLocationBackendService
         implements WiFiBackendHelper.Listener, 
                    CellBackendHelper.Listener,
-                   LocationCallback
-{
+                   LocationCallback {
 
     private static final String TAG = "IchnaeaBackendService";
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
+    private static final long RATE_LIMIT_MS_FLOOR = 10000;
+    private static final String PROVIDER = "ichnaea";
 
-    private long RATE_LIMIT_MS_FLOOR = 10000;
     private long EXP_BACKOFF_RATE = 1;
 
     private static BackendService instance;
@@ -59,13 +59,12 @@ public class BackendService extends HelperLocationBackendService
     private boolean useWiFis = true;
     private boolean useCells = true;
 
-    private static final String PROVIDER = "ichnaea";
     private String lastRequest = null;
     private Location lastResponse = null;
 
 
     @Override
-    synchronized public void onCreate() {
+    public synchronized void onCreate() {
         super.onCreate();
         reloadSettings();
         reloadInstanceSettings();
@@ -73,7 +72,7 @@ public class BackendService extends HelperLocationBackendService
     }
 
     @Override
-    synchronized public boolean canRun() {
+    public synchronized boolean canRun() {
         long delay = RATE_LIMIT_MS_FLOOR * EXP_BACKOFF_RATE;
         return (lastRequestTime + delay > System.currentTimeMillis());
     }
@@ -81,37 +80,37 @@ public class BackendService extends HelperLocationBackendService
     // Methods to extend or reduce the backoff time
 
     @Override
-    synchronized public void extendBackoff() {
+    public synchronized void extendBackoff() {
         if (EXP_BACKOFF_RATE < 1024) {
             EXP_BACKOFF_RATE *= 2;
         }
     }
 
     @Override
-    synchronized public void reduceBackoff() {
+    public synchronized void reduceBackoff() {
         if (EXP_BACKOFF_RATE > 1) {
             EXP_BACKOFF_RATE /= 2;
         }
     }
 
     @Override
-    synchronized public void resultCallback(Location location_result) {
-        if (location_result == null) {
+    public synchronized void resultCallback(Location locationResult) {
+        if (locationResult == null) {
             if (lastResponse == null) {
                 // There isn't even a lastResponse to work with
                 Log.d(TAG, "No previous location to replay");
                 return;
             }
-            location_result = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
-            Log.d(TAG, "Replaying location " + location_result);
+            locationResult = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
+            Log.d(TAG, "Replaying location " + locationResult);
         }
         lastRequestTime = System.currentTimeMillis();
-        lastResponse  = location_result;
-        report(location_result);
+        lastResponse  = locationResult;
+        report(locationResult);
     }
 
     @Override
-    synchronized protected void onOpen() {
+    protected synchronized void onOpen() {
         super.onOpen();
         reloadSettings();
         instance = this;
@@ -143,7 +142,7 @@ public class BackendService extends HelperLocationBackendService
     }
 
     @Override
-    synchronized protected void onClose() {
+    protected synchronized void onClose() {
         super.onClose();
         running = false;
         if (instance == this) {
@@ -170,20 +169,25 @@ public class BackendService extends HelperLocationBackendService
     }
 
     @Override
-    synchronized protected Location update() {
+    protected synchronized Location update() {
         return super.update();
     }
 
-    synchronized private void startCalculate() {
+    private synchronized void startCalculate() {
         final Set<WiFi> wiFis = this.wiFis;
         final Set<Cell> cells = this.cells;
         if ((cells == null || cells.isEmpty()) && (wiFis == null || wiFis.size() < 2)) return;
 
         try {
             final String request = createRequest(cells, wiFis);
-            IchnaeaRequester requester = new IchnaeaRequester(this, request);
-            Thread t = new Thread(requester);
-            t.start();
+            if (!this.canRun()) {
+                this.resultCallback(null);
+                return;
+            } else {
+                IchnaeaRequester requester = new IchnaeaRequester(this, request);
+                Thread t = new Thread(requester);
+                t.start();
+            }
         } catch (Exception e) {
             Log.w(TAG, e);
         }

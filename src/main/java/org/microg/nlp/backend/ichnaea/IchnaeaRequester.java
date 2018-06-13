@@ -44,25 +44,18 @@ public class IchnaeaRequester implements Runnable {
     private static final String TAG = "IchnaeaBackendService";
     private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
+    private static final String PROVIDER = "ichnaea";
 
     private LocationCallback callback = null;
     private String request;
 
-    private static final String PROVIDER = "ichnaea";
-
-
-    public IchnaeaRequester(LocationCallback backendService, String request)
-    {
+    public IchnaeaRequester(LocationCallback backendService, String request) {
             this.callback = backendService;
             this.request = request;
     }
 
 
     public void run() {
-        if (!this.callback.canRun()) {
-            this.callback.resultCallback(null);
-            return;
-        }
         HttpURLConnection conn = null;
         Location response = null;
         try {
