@@ -66,7 +66,7 @@ public class IchnaeaRequester implements Runnable {
             conn.getOutputStream().write(request.getBytes());
             int respCode = conn.getResponseCode();
             if ((respCode >= 400) && (respCode <= 599)) {
-                // Increate exponential backoff time for
+                // Increase exponential backoff time for
                 // any 400 or 500 series status code
                 this.callback.extendBackoff();
                 this.callback.resultCallback(null);
