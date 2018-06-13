@@ -48,7 +48,7 @@ public class BackendService extends HelperLocationBackendService
     private static final long RATE_LIMIT_MS_PADDING = 10000;
     private static final String PROVIDER = "ichnaea";
 
-    private long EXP_BACKOFF_FACTOR = 0;
+    private long exp_backoff_factor = 0;
 
     private static BackendService instance;
 
@@ -74,7 +74,7 @@ public class BackendService extends HelperLocationBackendService
 
     @Override
     public synchronized boolean canRun() {
-        long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * EXP_BACKOFF_FACTOR);
+        long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * exp_backoff_factor);
         return (lastRequestTime + delay > System.currentTimeMillis());
     }
 
@@ -82,20 +82,20 @@ public class BackendService extends HelperLocationBackendService
 
     @Override
     public synchronized void extendBackoff() {
-        if (EXP_BACKOFF_FACTOR == 0) {
-            EXP_BACKOFF_FACTOR = 1;
-        } else if (EXP_BACKOFF_FACTOR > 0 && EXP_BACKOFF_FACTOR < 1024) {
-            EXP_BACKOFF_FACTOR *= 2;
+        if (exp_backoff_factor == 0) {
+            exp_backoff_factor = 1;
+        } else if (exp_backoff_factor > 0 && exp_backoff_factor < 1024) {
+            exp_backoff_factor *= 2;
         }
     }
 
     @Override
     public synchronized void reduceBackoff() {
-        if (EXP_BACKOFF_FACTOR == 1) {
+        if (exp_backoff_factor == 1) {
             // Turn the exponential backoff off entirely
-            EXP_BACKOFF_FACTOR = 0;
+            exp_backoff_factor = 0;
         } else {
-            EXP_BACKOFF_FACTOR /= 2;
+            exp_backoff_factor /= 2;
         }
     }
 
