@@ -75,7 +75,7 @@ public class BackendService extends HelperLocationBackendService
     @Override
     public synchronized boolean canRun() {
         long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * expBackoffFactor);
-        return (lastRequestTime + delay > System.currentTimeMillis());
+        return (lastRequestTime + delay < System.currentTimeMillis());
     }
 
     // Methods to extend or reduce the backoff time
@@ -109,9 +109,10 @@ public class BackendService extends HelperLocationBackendService
             }
             locationResult = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
             Log.d(TAG, "Replaying location " + locationResult);
+        } else {
+            lastRequestTime = System.currentTimeMillis();
+            lastResponse = locationResult;
         }
-        lastRequestTime = System.currentTimeMillis();
-        lastResponse  = locationResult;
         report(locationResult);
     }
 
