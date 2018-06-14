@@ -66,6 +66,9 @@ android {
     defaultConfig {
         versionName getMyVersionName()
         versionCode(getMyVersionCode() + 20000)
+        jackOptions {
+            enabled true
+        }
     }
 }
 
