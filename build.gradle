@@ -26,8 +26,8 @@ buildscript {
 
 /* This is a hack, trying to provide release updates to F-Droid until it can properly handle Gradle
 applicationId "org.microg.nlp.backend.ichnaea"
-versionName "1.3.3"
-versionCode "20025"
+versionName "1.4.0"
+versionCode "20033"
  */
 
 apply plugin: 'com.android.application'
