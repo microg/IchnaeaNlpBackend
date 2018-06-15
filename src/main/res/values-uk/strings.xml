@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (C) 2013-2018 microG Project Team
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<resources>
+    <string name="app_name">Mozilla UnifiedNlp Backend</string>
+    <string name="backend_name">Сервіс позиціювання Mozilla</string>
+    <string name="summary">Позиціювання на основі мережевої бази даних від Mozilla</string>
+
+    <string name="pref_category_submit">Внесок даних</string>
+    <string name="pref_title_submit_data">Внести дані</string>
+    <string name="pref_description_submit_data">Подавати інформацію про точки доступу до публічної бази даних сервісу позиціювання Mozilla</string>
+    <string name="pref_title_nickname">Псевдонім</string>
+    <string name="pref_description_nickname">Використовується для показу в таблиці лідерів постачальників даних до сервісу позиціювання Mozilla (за умови подачі даних)</string>
+    <string name="pref_title_install_mozstumbler">Встановити Mozilla Stumbler</string>
+    <string name="pref_description_install_mozstumbler">Mozilla Stumbler — інструмент для внесення інформації до публічної бази даних сервісу позиціювання Mozilla</string>
+
+    <string name="pref_category_source">Джерела даних</string>
+    <string name="pref_title_use_wifis">Використовувати Wi-Fi</string>
+    <string name="pref_description_use_wifis">Чи подавати дані Wi-Fi до сервісу геолокації</string>
+    <string name="pref_title_use_cells">Використовувати стільники (GSM/UMTS/LTE/CDMA)</string>
+    <string name="pref_description_use_cells">Чи подавати дані стільникового зв\'язку до сервісу геолокації.\nНеобхідна версія Android 4.2 чи новіша.</string>
+
+    <string name="first_time_notification_title">Внесок до сервісу позиціювання Mozilla</string>
+    <string name="first_time_notification_content"><![CDATA[ Сервіс позиціювання Mozilla - це вільна база даних позиціювання, яка підтримується користувачами.<br>
+Ichnaea Backend дозволяє вам робити внесок до бази даних, таким чином поліпшуючи  точність для всіх користувачів без додаткового використання батареї та мережевого трафіку.<br>
+<b>Натисніть тут, аби відкрити налаштування та увімкнути надсилання даних.</b> Дякую.]]></string>
+</resources>
