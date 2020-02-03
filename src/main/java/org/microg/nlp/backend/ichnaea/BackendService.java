@@ -46,6 +46,7 @@ public class BackendService extends HelperLocationBackendService
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final long RATE_LIMIT_MS_FLOOR = 60000;
     private static final long RATE_LIMIT_MS_PADDING = 10000;
+    private static final long RACE_CONDITION_TIMEOUT = 4000;
     private static final String PROVIDER = "ichnaea";
 
     private long expBackoffFactor = 0;
@@ -56,6 +57,7 @@ public class BackendService extends HelperLocationBackendService
     private Set<WiFi> wiFis;
     private Set<Cell> cells;
     private long lastRequestTime = 0;
+    private boolean lastResquestUseWifi = false;
 
     private boolean useWiFis = true;
     private boolean useCells = true;
@@ -110,6 +112,10 @@ public class BackendService extends HelperLocationBackendService
             locationResult = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
             Log.d(TAG, "Replaying location " + locationResult);
         } else {
+            //Avoid race condition: Preserve the most precise location
+            if(lastRequestTime + RACE_CONDITION_TIMEOUT > System.currentTimeMillis() && locationResult.getAccuracy() > lastResponse.getAccuracy())
+                return;
+
             lastRequestTime = System.currentTimeMillis();
             lastResponse = locationResult;
         }
@@ -187,13 +193,19 @@ public class BackendService extends HelperLocationBackendService
 
         try {
             final String request = createRequest(cells, wiFis);
-            if (!this.canRun()) {
-                this.resultCallback(null);
-                return;
-            } else {
+            //Bypass limit if there is wifi signal
+            if (this.canRun() || (wiFis != null && wiFis.size() > 2 && !lastResquestUseWifi)) {
+                if(wiFis != null && wiFis.size() > 2)
+                    lastResquestUseWifi = true;
+                else
+                    lastResquestUseWifi = false;
+
                 IchnaeaRequester requester = new IchnaeaRequester(this, request);
                 Thread t = new Thread(requester);
                 t.start();
+            } else {
+                this.resultCallback(null);
+                return;
             }
         } catch (Exception e) {
             Log.w(TAG, e);
