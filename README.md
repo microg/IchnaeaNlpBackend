@@ -1,12 +1,18 @@
+<!--
+SPDX-FileCopyrightText: 2015, microg Project Team
+SPDX-License-Identifier: CC-BY-SA-4.0
+-->
+
+
 IchnaeaNlpBackend
 ===================
-[![Build Status](https://travis-ci.org/microg/IchnaeaNlpBackend.svg?branch=master)](https://travis-ci.org/microg/IchnaeaNlpBackend)
+[![Build Status](https://github.com/microg/IchnaeaNlpBackend/workflows/Build/badge.svg)](https://github.com/microg/IchnaeaNlpBackend/actions)
 
-[UnifiedNlp](https://github.com/microg/android_packages_apps_UnifiedNlp) backend that uses [Mozilla Location Services](https://location.services.mozilla.com/) to resolve locations.
+[UnifiedNlp](https://github.com/microg/UnifiedNlp) backend that uses [Mozilla Location Services](https://location.services.mozilla.com/) to resolve locations.
 
 License
 -------
-    Copyright (C) 2015-2018 microG Project Team
+    Copyright (C) 2015-2022 microG Project Team
     
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

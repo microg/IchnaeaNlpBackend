@@ -1,17 +1,6 @@
 /*
- * Copyright (C) 2013-2017 microG Project Team
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: 2015 microG Project Team
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.microg.nlp.backend.ichnaea;
@@ -28,7 +17,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.microg.nlp.api.CellBackendHelper;
 import org.microg.nlp.api.HelperLocationBackendService;
-import org.microg.nlp.api.LocationHelper;
 import org.microg.nlp.api.WiFiBackendHelper;
 
 import java.util.Set;
@@ -42,8 +30,8 @@ public class BackendService extends HelperLocationBackendService
                    LocationCallback {
 
     private static final String TAG = "IchnaeaBackendService";
-    private static final String SERVICE_URL = "https://location.services.mozilla.com/v1/geolocate?key=%s";
-    private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
+    private static final long MAX_WIFI_AGE = 60000;
+    private static final long MAX_CELLS_AGE = 120000;
     private static final long RATE_LIMIT_MS_FLOOR = 60000;
     private static final long RATE_LIMIT_MS_PADDING = 10000;
     private static final String PROVIDER = "ichnaea";
@@ -52,15 +40,17 @@ public class BackendService extends HelperLocationBackendService
 
     private static BackendService instance;
 
+    private CellDatabase cellDatabase;
     private boolean running = false;
     private Set<WiFi> wiFis;
+    private long lastWifiTime = 0;
+    private boolean wiFisEnabled = false;
     private Set<Cell> cells;
+    private long lastCellTime = 0;
+    private boolean cellsEnabled = false;
     private long lastRequestTime = 0;
+    private long lastResponseTime = 0;
 
-    private boolean useWiFis = true;
-    private boolean useCells = true;
-
-    private String lastRequest = null;
     private Location lastResponse = null;
 
 
@@ -69,13 +59,12 @@ public class BackendService extends HelperLocationBackendService
         super.onCreate();
         reloadSettings();
         reloadInstanceSettings();
-
     }
 
     @Override
     public synchronized boolean canRun() {
         long delay = RATE_LIMIT_MS_FLOOR + (RATE_LIMIT_MS_PADDING * expBackoffFactor);
-        return (lastRequestTime + delay < System.currentTimeMillis());
+        return (Math.max(lastRequestTime, lastResponseTime) + delay < System.currentTimeMillis());
     }
 
     // Methods to extend or reduce the backoff time
@@ -107,13 +96,12 @@ public class BackendService extends HelperLocationBackendService
                 Log.d(TAG, "No previous location to replay");
                 return;
             }
-            locationResult = LocationHelper.create(PROVIDER, lastResponse.getLatitude(), lastResponse.getLongitude(), lastResponse.getAccuracy());
-            Log.d(TAG, "Replaying location " + locationResult);
+            Log.d(TAG, "Replaying location " + lastResponse);
         } else {
-            lastRequestTime = System.currentTimeMillis();
+            lastResponseTime = System.currentTimeMillis();
             lastResponse = locationResult;
         }
-        report(locationResult);
+        report(lastResponse);
     }
 
     @Override
@@ -137,14 +125,22 @@ public class BackendService extends HelperLocationBackendService
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         removeHelpers();
         if (preferences.getBoolean("use_cells", true) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            cellsEnabled = true;
             addHelper(new CellBackendHelper(this, this));
+            cellDatabase = new CellDatabase(this);
         } else {
             cells = null;
+            lastCellTime = 0;
+            cellsEnabled = false;
+            cellDatabase = null;
         }
         if (preferences.getBoolean("use_wifis", true)) {
+            wiFisEnabled = true;
             addHelper(new WiFiBackendHelper(this, this));
         } else {
             wiFis = null;
+            lastWifiTime = 0;
+            wiFisEnabled = false;
         }
     }
 
@@ -161,6 +157,8 @@ public class BackendService extends HelperLocationBackendService
     @Override
     public void onWiFisChanged(Set<WiFi> wiFis) {
         this.wiFis = wiFis;
+        this.lastWifiTime = System.currentTimeMillis();
+        Log.d(TAG, "WiFis: " + wiFis.size());
         if (running) {
             startCalculate();
         }
@@ -169,6 +167,7 @@ public class BackendService extends HelperLocationBackendService
     @Override
     public void onCellsChanged(Set<Cell> cells) {
         this.cells = cells;
+        this.lastCellTime = System.currentTimeMillis();
         Log.d(TAG, "Cells: " + cells.size());
         if (running) {
             startCalculate();
@@ -181,19 +180,39 @@ public class BackendService extends HelperLocationBackendService
     }
 
     private synchronized void startCalculate() {
-        final Set<WiFi> wiFis = this.wiFis;
-        final Set<Cell> cells = this.cells;
-        if ((cells == null || cells.isEmpty()) && (wiFis == null || wiFis.size() < 2)) return;
+        Set<WiFi> wiFis = this.wiFis;
+        if (lastWifiTime < System.currentTimeMillis() - MAX_WIFI_AGE) wiFis = null;
+        if (wiFis != null && wiFis.size() < 2) wiFis = null;
+        Set<Cell> cells = this.cells;
+        if (lastCellTime < System.currentTimeMillis() - MAX_CELLS_AGE) cells = null;
+        if (cells != null && cells.isEmpty()) cells = null;
+        if (cells == null && wiFis == null) return;
+        if ((lastWifiTime == 0 && wiFisEnabled) || (lastCellTime == 0 && cellsEnabled)) return;
 
         try {
-            final String request = createRequest(cells, wiFis);
-            if (!this.canRun()) {
-                this.resultCallback(null);
+            Location cachedCellLocation = null;
+            if (cells != null && cells.size() == 1) {
+                cachedCellLocation = cellDatabase.getLocation(cells.iterator().next());
+            }
+            if (cachedCellLocation != null && wiFis == null) {
+                // Just use the cached cell location instantly
+                resultCallback(cachedCellLocation);
                 return;
-            } else {
-                IchnaeaRequester requester = new IchnaeaRequester(this, request);
+            }
+            if (this.canRun()) {
+                lastRequestTime = System.currentTimeMillis();
+                Cell singleCell = cells != null ? cells.iterator().next() : null;
+                String cellRequest = cells != null ? createRequest(cells, null) : null;
+                String wifiRequest = wiFis != null ? createRequest(cells, wiFis) : null;
+                IchnaeaRequester requester = new IchnaeaRequester(this, cellDatabase, singleCell, cellRequest, wifiRequest);
                 Thread t = new Thread(requester);
                 t.start();
+            } else {
+                if (cachedCellLocation != null && cachedCellLocation.getAccuracy() <= lastResponse.getAccuracy()) {
+                    resultCallback(cachedCellLocation);
+                } else {
+                    resultCallback(null);
+                }
             }
         } catch (Exception e) {
             Log.w(TAG, e);

@@ -1,38 +1,23 @@
 /*
- * Copyright (C) 2013-2017 microG Project Team
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: 2015 microG Project Team
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.microg.nlp.backend.ichnaea;
 
-import android.app.DownloadManager;
 import android.location.Location;
 import android.util.Log;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.microg.nlp.api.CellBackendHelper;
-import org.microg.nlp.api.HelperLocationBackendService;
 import org.microg.nlp.api.LocationHelper;
-import org.microg.nlp.api.WiFiBackendHelper;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Set;
 
 /*
  * This class implements the runnable portion of a thread which
@@ -46,18 +31,60 @@ public class IchnaeaRequester implements Runnable {
     private static final String API_KEY = "068ab754-c06b-473d-a1e5-60e7b1a2eb77";
     private static final String PROVIDER = "ichnaea";
 
-    private LocationCallback callback = null;
-    private String request;
+    private final LocationCallback callback;
+    private final CellDatabase cellDatabase;
+    private final CellBackendHelper.Cell singleCell;
+    private final String cellRequest;
+    private final String wifiRequest;
 
-    public IchnaeaRequester(LocationCallback backendService, String request) {
-            this.callback = backendService;
-            this.request = request;
+    public IchnaeaRequester(LocationCallback backendService, CellDatabase cellDatabase, CellBackendHelper.Cell singleCell, String cellRequest, String wifiRequest) {
+        this.callback = backendService;
+        this.cellDatabase = cellDatabase;
+        this.singleCell = singleCell;
+        this.cellRequest = cellRequest;
+        this.wifiRequest = wifiRequest;
     }
 
 
     public void run() {
+        Location cellLocation = null;
+        if (singleCell != null) {
+            cellLocation = cellDatabase.getLocation(singleCell);
+        }
+        if (cellLocation == null && cellRequest != null) {
+            cellLocation = request(cellRequest);
+            if (cellLocation == null) {
+                this.callback.extendBackoff();
+                this.callback.resultCallback(null);
+                return;
+            }
+            if (singleCell != null) {
+                cellDatabase.putLocation(singleCell, cellLocation);
+            }
+        }
+        Location wifiLocation = null;
+        if (wifiRequest != null) {
+            wifiLocation = request(wifiRequest);
+            if (wifiLocation == null) {
+                this.callback.extendBackoff();
+            }
+        }
+        if (cellLocation == null || cellLocation.getAccuracy() == 0.0) {
+            this.callback.resultCallback(wifiLocation);
+        } else if (wifiLocation == null || wifiLocation.getAccuracy() == 0.0) {
+            this.callback.resultCallback(cellLocation);
+        } else {
+            if (cellLocation.distanceTo(wifiLocation) > cellLocation.getAccuracy() * 2) {
+                // Wifi Location is too far off
+                this.callback.resultCallback(cellLocation);
+            } else {
+                this.callback.resultCallback(wifiLocation);
+            }
+        }
+    }
+
+    private Location request(String request) {
         HttpURLConnection conn = null;
-        Location response = null;
         try {
             conn = (HttpURLConnection) new URL(String.format(SERVICE_URL, API_KEY)).openConnection();
             conn.setDoOutput(true);
@@ -66,15 +93,8 @@ public class IchnaeaRequester implements Runnable {
             conn.getOutputStream().write(request.getBytes());
             int respCode = conn.getResponseCode();
             if ((respCode >= 400) && (respCode <= 599)) {
-                // Increase exponential backoff time for
-                // any 400 or 500 series status code
-                this.callback.extendBackoff();
-                this.callback.resultCallback(null);
-                return;
-            } else {
-                // Adjust the backoff time back down
-                // towards the floor value
-                this.callback.reduceBackoff();
+                Log.w(TAG, "response code 400-600 -> backoff");
+                return null;
             }
             String r = new String(readStreamToEnd(conn.getInputStream()));
             Log.d(TAG, "response: " + r);
@@ -82,9 +102,8 @@ public class IchnaeaRequester implements Runnable {
             double lat = responseJson.getJSONObject("location").getDouble("lat");
             double lon = responseJson.getJSONObject("location").getDouble("lng");
             double acc = responseJson.getDouble("accuracy");
-            response = LocationHelper.create(PROVIDER, lat, lon, (float) acc);
-            this.callback.resultCallback(response);
-        } catch (IOException | JSONException e) {
+            return LocationHelper.create(PROVIDER, lat, lon, (float) acc);
+        } catch (Exception e) {
             if (conn != null) {
                 InputStream is = conn.getErrorStream();
                 if (is != null) {
@@ -95,9 +114,9 @@ public class IchnaeaRequester implements Runnable {
                     }
                 }
             }
-            Log.w(TAG, e);
+            Log.w(TAG, "Error", e);
+            return null;
         }
-        this.callback.resultCallback(null);
     }
 
     private static byte[] readStreamToEnd(InputStream is) throws IOException {
