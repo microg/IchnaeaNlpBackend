@@ -208,7 +208,8 @@ public class BackendService extends HelperLocationBackendService
                 Thread t = new Thread(requester);
                 t.start();
             } else {
-                if (cachedCellLocation != null && cachedCellLocation.getAccuracy() <= lastResponse.getAccuracy()) {
+                if (cachedCellLocation != null && lastResponse != null
+                        && cachedCellLocation.getAccuracy() <= lastResponse.getAccuracy()) {
                     resultCallback(cachedCellLocation);
                 } else {
                     resultCallback(null);
